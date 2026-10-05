@@ -15,6 +15,24 @@ import (
 	"github.com/substrait-io/substrait-go/v9/types/integer_parameters"
 )
 
+func TestRecordTypeConcatDoesNotShareStorage(t *testing.T) {
+	i64 := &Int64Type{Nullability: NullabilityRequired}
+	str := &StringType{Nullability: NullabilityRequired}
+	boolean := &BooleanType{Nullability: NullabilityRequired}
+	storage := []Type{i64, boolean}
+	left := NewRecordTypeFromTypes(storage[:1])
+	right := NewRecordTypeFromTypes([]Type{str})
+
+	result := left.Concat(*right)
+	assert.Equal(t, []Type{i64, str}, result.Types())
+	assert.Equal(t, []Type{i64, boolean}, storage)
+
+	result.Types()[0] = str
+	result.Types()[1] = boolean
+	assert.Equal(t, []Type{i64}, left.Types())
+	assert.Equal(t, []Type{str}, right.Types())
+}
+
 func TestTypeToString(t *testing.T) {
 	tests := []struct {
 		t        Type
@@ -60,59 +78,50 @@ func TestTypeToString(t *testing.T) {
 	}
 }
 
-func TestTypeRoundtrip(t *testing.T) {
-	for _, nullable := range []bool{true, false} {
-		t.Run(fmt.Sprintf("nullable=%t", nullable), func(t *testing.T) {
-			n := NullabilityRequired
-			if nullable {
-				n = NullabilityNullable
-			}
+func TestWithNullabilityDoesNotMutateReceiver(t *testing.T) {
+	tests := []struct {
+		name string
+		typ  Type
+	}{
+		{"boolean", &BooleanType{Nullability: NullabilityRequired}},
+		{"int8", &Int8Type{Nullability: NullabilityRequired}},
+		{"int16", &Int16Type{Nullability: NullabilityRequired}},
+		{"int32", &Int32Type{Nullability: NullabilityRequired}},
+		{"int64", &Int64Type{Nullability: NullabilityRequired}},
+		{"float32", &Float32Type{Nullability: NullabilityRequired}},
+		{"float64", &Float64Type{Nullability: NullabilityRequired}},
+		{"binary", &BinaryType{Nullability: NullabilityRequired}},
+		{"string", &StringType{Nullability: NullabilityRequired}},
+		{"timestamp", &TimestampType{Nullability: NullabilityRequired}},
+		{"date", &DateType{Nullability: NullabilityRequired}},
+		{"time", &TimeType{Nullability: NullabilityRequired}},
+		{"timestamp_tz", &TimestampTzType{Nullability: NullabilityRequired}},
+		{"interval_year", &IntervalYearType{Nullability: NullabilityRequired}},
+		{"uuid", &UUIDType{Nullability: NullabilityRequired}},
+		{"fixed_char", &FixedCharType{Nullability: NullabilityRequired, Length: 5}},
+		{"varchar", &VarCharType{Nullability: NullabilityRequired, Length: 15}},
+		{"fixed_binary", &FixedBinaryType{Nullability: NullabilityRequired, Length: 10}},
+		{"decimal", &DecimalType{Nullability: NullabilityRequired, Precision: 4, Scale: 2}},
+		{"enum", &EnumType{Nullability: NullabilityRequired, Name: "mode", Options: []string{"a", "b"}}},
+		{"interval_day", &IntervalDayType{Nullability: NullabilityRequired, Precision: PrecisionSeconds}},
+		{"interval_year_to_month", NewIntervalYearToMonthType().WithNullability(NullabilityRequired)},
+		{"interval_compound", NewIntervalCompoundType().WithPrecision(PrecisionMilliSeconds).WithNullability(NullabilityRequired)},
+		{"precision_time", &PrecisionTimeType{Nullability: NullabilityRequired, Precision: PrecisionMilliSeconds}},
+		{"precision_timestamp", &PrecisionTimestampType{Nullability: NullabilityRequired, Precision: PrecisionMilliSeconds}},
+		{"precision_timestamp_tz", &PrecisionTimestampTzType{PrecisionTimestampType: PrecisionTimestampType{Nullability: NullabilityRequired, Precision: PrecisionMilliSeconds}}},
+		{"struct", &StructType{Nullability: NullabilityRequired, Types: []Type{&Int8Type{Nullability: NullabilityRequired}}}},
+		{"list", &ListType{Nullability: NullabilityRequired, Type: &Int8Type{Nullability: NullabilityRequired}}},
+		{"map", &MapType{Nullability: NullabilityRequired, Key: &StringType{Nullability: NullabilityRequired}, Value: &Int8Type{Nullability: NullabilityRequired}}},
+		{"func", &FuncType{Nullability: NullabilityRequired, ParameterTypes: []Type{&Int8Type{Nullability: NullabilityRequired}}, ReturnType: &Int16Type{Nullability: NullabilityRequired}}},
+		{"user_defined", &UserDefinedType{Nullability: NullabilityRequired, TypeParameters: []TypeParam{&DataTypeParameter{Type: &Int32Type{Nullability: NullabilityRequired}}}}},
+	}
 
-			tests := []Type{
-				&BooleanType{Nullability: n},
-				&Int8Type{Nullability: n},
-				&Int16Type{Nullability: n},
-				&Int32Type{Nullability: n},
-				&Int64Type{Nullability: n},
-				&Float32Type{Nullability: n},
-				&Float64Type{Nullability: n},
-				&StringType{Nullability: n},
-				&BinaryType{Nullability: n},
-				&TimeType{Nullability: n},
-				&DateType{Nullability: n},
-				&TimestampType{Nullability: n},
-				&TimestampTzType{Nullability: n},
-				&IntervalYearType{Nullability: n},
-				&UUIDType{Nullability: n},
-				&FixedCharType{Nullability: n, Length: 25},
-				&VarCharType{Nullability: n, Length: 35},
-				&FixedBinaryType{Nullability: n, Length: 45},
-				&IntervalDayType{Nullability: n, Precision: 5},
-				&IntervalDayType{Nullability: n, Precision: 0},
-				NewIntervalCompoundType().WithPrecision(PrecisionEMinus7Seconds).WithNullability(n),
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.typ.WithNullability(NullabilityNullable)
 
-				&DecimalType{Nullability: n, Precision: 34, Scale: 3},
-				&PrecisionTimeType{Nullability: n, Precision: PrecisionEMinus4Seconds},
-				&PrecisionTimestampType{Nullability: n, Precision: PrecisionEMinus4Seconds},
-				&PrecisionTimestampTzType{PrecisionTimestampType: PrecisionTimestampType{Nullability: n, Precision: PrecisionEMinus5Seconds}},
-				&MapType{Nullability: n, Key: &Int8Type{}, Value: &Int16Type{Nullability: n}},
-				&ListType{Nullability: n, Type: &TimeType{Nullability: n}},
-				&StructType{Nullability: n, Types: []Type{
-					&TimeType{Nullability: n}, &TimestampType{Nullability: n},
-					&TimestampTzType{Nullability: n}}},
-				&UserDefinedType{TypeParameters: []TypeParam{&DataTypeParameter{Type: &Int32Type{}}}, Nullability: n},
-				&FuncType{Nullability: n, ParameterTypes: []Type{&Int8Type{}}, ReturnType: &Int16Type{Nullability: n}},
-				&FuncType{Nullability: n, ParameterTypes: []Type{&Int32Type{Nullability: n}, &Float64Type{Nullability: n}}, ReturnType: &BooleanType{Nullability: NullabilityNullable}},
-				&FuncType{Nullability: n, ParameterTypes: []Type{}, ReturnType: &Int32Type{Nullability: n}},
-			}
-
-			for _, tt := range tests {
-				t.Run(tt.String(), func(t *testing.T) {
-					converted := TypeToProto(tt)
-					convertedType := TypeFromProto(converted)
-					assert.True(t, tt.Equals(convertedType))
-				})
-			}
+			assert.Equal(t, NullabilityRequired, tt.typ.GetNullability())
+			assert.Equal(t, NullabilityNullable, got.GetNullability())
 		})
 	}
 }

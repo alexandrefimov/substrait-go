@@ -8,7 +8,6 @@ import (
 	"github.com/substrait-io/substrait-go/v9/expr"
 	"github.com/substrait-io/substrait-go/v9/extensions"
 	"github.com/substrait-io/substrait-go/v9/types"
-	proto "github.com/substrait-io/substrait-protobuf/go/substraitpb"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -75,7 +74,8 @@ func TestRelations_Copy(t *testing.T) {
 	crossRel := &CrossRel{left: createVirtualTableReadRel(1), right: createVirtualTableReadRel(2)}
 	extensionLeafRel := &ExtensionLeafRel{}
 	extensionMultiRel := &ExtensionMultiRel{inputs: []Rel{createVirtualTableReadRel(1), createVirtualTableReadRel(2)}}
-	fetchRel := &FetchRel{input: createVirtualTableReadRel(1), offset: 1, count: 2}
+	fetchOffset, fetchCount := expr.Expression(expr.NewPrimitiveLiteral(int64(1), false)), expr.Expression(expr.NewPrimitiveLiteral(int64(2), false))
+	fetchRel := &FetchRel{input: createVirtualTableReadRel(1), offset: fetchOffset, count: fetchCount}
 	filterRel := &FilterRel{input: createVirtualTableReadRel(1), cond: expr.NewPrimitiveLiteral(true, false)}
 	hashJoinRel := &HashJoinRel{left: createVirtualTableReadRel(1), right: createVirtualTableReadRel(2), joinType: HashMergeInner, keys: []*ComparisonJoinKey{}, postJoinFilter: expr.NewPrimitiveLiteral(true, false)}
 	joinRel := &JoinRel{left: createVirtualTableReadRel(1), right: createVirtualTableReadRel(2), joinType: JoinTypeInner, expr: expr.NewPrimitiveLiteral(true, false), postJoinFilter: expr.NewPrimitiveLiteral(true, false)}
@@ -168,7 +168,7 @@ func TestRelations_Copy(t *testing.T) {
 			name:        "FetchRel Copy with new inputs",
 			relation:    fetchRel,
 			newInputs:   []Rel{createVirtualTableReadRel(6)},
-			expectedRel: &FetchRel{input: createVirtualTableReadRel(6), offset: 1, count: 2},
+			expectedRel: &FetchRel{input: createVirtualTableReadRel(6), offset: fetchOffset, count: fetchCount},
 		},
 		{
 			name:            "FetchRel Copy with same inputs and noOpRewrite",
@@ -176,6 +176,13 @@ func TestRelations_Copy(t *testing.T) {
 			newInputs:       fetchRel.GetInputs(),
 			rewriteFunc:     noOpRewrite,
 			expectedSameRel: true,
+		},
+		{
+			name:        "FetchRel Copy with same inputs and expression rewrite",
+			relation:    fetchRel,
+			newInputs:   fetchRel.GetInputs(),
+			rewriteFunc: func(e expr.Expression) (expr.Expression, error) { return createPrimitiveFloat(9.0), nil },
+			expectedRel: &FetchRel{input: createVirtualTableReadRel(1), offset: createPrimitiveFloat(9.0), count: createPrimitiveFloat(9.0)},
 		},
 		{
 			name:        "FilterRel Copy with new inputs",
@@ -457,7 +464,8 @@ func TestRelations_AdvancedExtensions(t *testing.T) {
 	crossRel := &CrossRel{left: createVirtualTableReadRel(1), right: createVirtualTableReadRel(2)}
 	extensionLeafRel := &ExtensionLeafRel{}
 	extensionMultiRel := &ExtensionMultiRel{inputs: []Rel{createVirtualTableReadRel(1), createVirtualTableReadRel(2)}}
-	fetchRel := &FetchRel{input: createVirtualTableReadRel(1), offset: 1, count: 2}
+	fetchOffset, fetchCount := expr.Expression(expr.NewPrimitiveLiteral(int64(1), false)), expr.Expression(expr.NewPrimitiveLiteral(int64(2), false))
+	fetchRel := &FetchRel{input: createVirtualTableReadRel(1), offset: fetchOffset, count: fetchCount}
 	filterRel := &FilterRel{input: createVirtualTableReadRel(1), cond: expr.NewPrimitiveLiteral(true, false)}
 	hashJoinRel := &HashJoinRel{left: createVirtualTableReadRel(1), right: createVirtualTableReadRel(2), joinType: HashMergeInner, keys: []*ComparisonJoinKey{}, postJoinFilter: expr.NewPrimitiveLiteral(true, false)}
 	joinRel := &JoinRel{left: createVirtualTableReadRel(1), right: createVirtualTableReadRel(2), joinType: JoinTypeInner, expr: expr.NewPrimitiveLiteral(true, false), postJoinFilter: expr.NewPrimitiveLiteral(true, false)}
@@ -496,20 +504,18 @@ func TestRelations_AdvancedExtensions(t *testing.T) {
 		icebergTableReadRel,
 	}
 
-	val1, err := anypb.New(expr.NewPrimitiveLiteral("foo", false).ToProto())
-	assert.NoError(t, err)
+	val1 := &anypb.Any{TypeUrl: "urn:test:advext", Value: []byte("foo")}
 
 	exampleAdvancedExtension1 := &extensions.AdvancedExtension{
-		Optimization: []*anypb.Any{val1},
-		Enhancement:  val1,
+		Optimizations: []*extensions.Optimization{(*extensions.Optimization)(val1)},
+		Enhancement:   (*extensions.Enhancement)(val1),
 	}
 
-	val2, err := anypb.New(expr.NewPrimitiveLiteral("bar", false).ToProto())
-	assert.NoError(t, err)
+	val2 := &anypb.Any{TypeUrl: "urn:test:advext", Value: []byte("bar")}
 
 	exampleAdvancedExtension2 := &extensions.AdvancedExtension{
-		Optimization: []*anypb.Any{val2},
-		Enhancement:  val2,
+		Optimizations: []*extensions.Optimization{(*extensions.Optimization)(val2)},
+		Enhancement:   (*extensions.Enhancement)(val2),
 	}
 
 	for _, relation := range relations {
@@ -567,14 +573,6 @@ func (f *fakeRel) directOutputSchema() types.RecordType {
 
 func (f *fakeRel) RecordType() types.RecordType {
 	return f.remap(f.directOutputSchema())
-}
-
-func (f *fakeRel) ToProto() *proto.Rel {
-	panic("unused")
-}
-
-func (f *fakeRel) ToProtoPlanRel() *proto.PlanRel {
-	panic("unused")
 }
 
 func (f *fakeRel) Copy(newInputs ...Rel) (Rel, error) {
@@ -678,7 +676,6 @@ func TestRightJoinRecordType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			rel := &JoinRel{left: left, right: right, joinType: tt.joinType}
 			assert.Equal(t, tt.expected, rel.RecordType())
-			assert.True(t, isRecordTypeSupported(rel))
 		})
 	}
 }
