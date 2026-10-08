@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-package plan_test
+package wire_test
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/substrait-io/substrait-go/v9/extensions"
-	"github.com/substrait-io/substrait-go/v9/plan"
+	"github.com/substrait-io/substrait-go/v9/wire"
 	substraitproto "github.com/substrait-io/substrait-protobuf/go/substraitpb"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -40,9 +40,9 @@ func TestUnknownFunctionRoundTripsUnderItsOwnName(t *testing.T) {
 			var input substraitproto.Plan
 			require.NoError(t, protojson.Unmarshal([]byte(fmt.Sprintf(template, name)), &input))
 
-			p, err := plan.FromProto(&input, extensions.GetDefaultCollectionWithNoError())
+			p, err := wire.PlanFromProto(&input, extensions.GetDefaultCollectionWithNoError())
 			require.NoError(t, err)
-			out, err := p.ToProto()
+			out, err := wire.PlanToProto(p)
 			require.NoError(t, err)
 
 			require.Len(t, out.GetExtensions(), 1)
