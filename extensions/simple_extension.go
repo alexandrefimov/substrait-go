@@ -192,7 +192,7 @@ func (a *FuncParameterList) UnmarshalYAML(fn func(interface{}) error) error {
 				Type:        &parser.TypeExpression{ValueType: valueType},
 			}
 		} else {
-			return fmt.Errorf("args[%d]: expected one of value, type or options", i)
+			return fmt.Errorf("args[%d]: expected one of options, value or type", i)
 		}
 	}
 

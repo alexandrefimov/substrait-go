@@ -59,7 +59,7 @@ scalar_functions:
 			})
 			require.Error(t, err)
 			if tt.field == "" {
-				assert.Contains(t, err.Error(), "args[1]: expected one of value, type or options")
+				assert.Contains(t, err.Error(), "args[1]: expected one of options, value or type")
 			} else {
 				assert.Contains(t, err.Error(), "args[1]."+tt.field)
 			}
