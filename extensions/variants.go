@@ -170,6 +170,9 @@ func matchArguments(nullability NullabilityHandling, paramTypeList FuncParameter
 			return false, nil
 		}
 		numNonVariadicArgs := len(paramTypeList) - 1
+		if len(actualTypes) < numNonVariadicArgs {
+			return false, nil
+		}
 		if !validateVariadicBehaviorForMatch(variadicBehavior, actualTypes[numNonVariadicArgs:]) {
 			return false, nil
 		}
