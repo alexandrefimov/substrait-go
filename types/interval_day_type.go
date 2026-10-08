@@ -2,8 +2,6 @@ package types
 
 import (
 	"fmt"
-
-	proto "github.com/substrait-io/substrait-protobuf/go/substraitpb"
 )
 
 // IntervalDayType this is used to represent a type of interval day.
@@ -19,8 +17,9 @@ func (m *IntervalDayType) GetPrecisionProtoVal() int32 {
 
 func (*IntervalDayType) isRootRef() {}
 func (m *IntervalDayType) WithNullability(n Nullability) Type {
-	m.Nullability = n
-	return m
+	out := *m
+	out.Nullability = n
+	return &out
 }
 
 func (m *IntervalDayType) GetType() Type                     { return m }
@@ -31,21 +30,6 @@ func (m *IntervalDayType) Equals(rhs Type) bool {
 		return *o == *m
 	}
 	return false
-}
-
-func (m *IntervalDayType) ToProtoFuncArg() *proto.FunctionArgument {
-	return &proto.FunctionArgument{
-		ArgType: &proto.FunctionArgument_Type{Type: m.ToProto()},
-	}
-}
-
-func (m *IntervalDayType) ToProto() *proto.Type {
-	precisionVal := m.Precision.ToProtoVal()
-	return &proto.Type{Kind: &proto.Type_IntervalDay_{
-		IntervalDay: &proto.Type_IntervalDay{
-			Precision:              &precisionVal,
-			Nullability:            proto.Type_Nullability(m.Nullability),
-			TypeVariationReference: m.TypeVariationRef}}}
 }
 
 func (*IntervalDayType) ShortString() string { return shortTypeNames[TypeNameIntervalDay] }
