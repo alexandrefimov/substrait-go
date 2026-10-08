@@ -32,6 +32,13 @@ func TestMarkJoinOutputSchema(t *testing.T) {
 			want = append(want, mark)
 			rel := NewJoinRel(left, right, tc.kind, expr.NewPrimitiveLiteral(true, false), nil, RelCommon{}, nil)
 			assert.Equal(t, want, rel.RecordType().Types())
+
+			t.Run("emit", func(t *testing.T) {
+				mapping := []int32{3, 0, 1}
+				emitted := NewJoinRel(left, right, tc.kind, expr.NewPrimitiveLiteral(true, false), nil,
+					NewRelCommon(nil, mapping, nil), nil)
+				assert.Equal(t, []types.Type{mark, want[0], want[1]}, emitted.RecordType().Types())
+			})
 		})
 	}
 }

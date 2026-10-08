@@ -10,6 +10,7 @@ import (
 	"github.com/substrait-io/substrait-go/v9/plan"
 	"github.com/substrait-io/substrait-go/v9/types"
 	proto "github.com/substrait-io/substrait-protobuf/go/substraitpb"
+	gproto "google.golang.org/protobuf/proto"
 )
 
 func TestLogicalJoinPostFilterUsesDirectOutput(t *testing.T) {
@@ -54,6 +55,11 @@ func TestLogicalJoinPostFilterUsesDirectOutput(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, condition.Equals(rel.(*plan.JoinRel).Expr()))
 			assert.Equal(t, &types.BooleanType{Nullability: tc.want}, rel.(*plan.JoinRel).PostJoinFilter().GetType())
+			encoded := RelToProto(rel)
+			assert.True(t, gproto.Equal(wire, encoded))
+			roundTrip, err := RelFromProto(encoded, joinTestRegistry())
+			require.NoError(t, err)
+			assert.Equal(t, rel.RecordType().Types(), roundTrip.RecordType().Types())
 		})
 	}
 }
