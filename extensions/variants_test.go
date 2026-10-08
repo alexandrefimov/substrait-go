@@ -1087,6 +1087,29 @@ func TestValidateConstrainedAnyTypeConsistency(t *testing.T) {
 	})
 }
 
+func TestOnTheFlyVariadicVariantWithUnknownArguments(t *testing.T) {
+	id := extensions.FunctionID{
+		URN:  "extension:io.substrait:functions_arithmetic_decimal",
+		Name: "no_such_function:dec_dec",
+	}
+	variadic := &extensions.VariadicBehavior{Min: 1}
+	for name, variant := range map[string]interface {
+		Match([]types.Type) (bool, error)
+	}{
+		"scalar":    extensions.NewScalarFuncVariantWithProps(id, variadic, false, true),
+		"aggregate": extensions.NewAggFuncVariantOpts(id, extensions.AggVariantOptions{Variadic: variadic}),
+		"window":    extensions.NewWindowFuncVariantOpts(id, extensions.WindowVariantOpts{Variadic: variadic}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, args := range [][]types.Type{nil, {&types.DecimalType{Precision: 10, Scale: 2}}} {
+				matched, err := variant.Match(args)
+				require.NoError(t, err)
+				require.False(t, matched)
+			}
+		})
+	}
+}
+
 func TestOnTheFlyVariantKeepsItsCompoundName(t *testing.T) {
 	// "dec" is what (*DecimalType).ShortString writes into a compound name, and
 	// ParseType rejects it, so the arguments stay unknown. The name a plan gave
